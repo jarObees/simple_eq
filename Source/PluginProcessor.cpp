@@ -93,8 +93,15 @@ void Simple_eqAudioProcessor::changeProgramName (int index, const juce::String& 
 //==============================================================================
 void Simple_eqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
+    // Struct that contains: samples per block, number of channels, and the sample rate.
+    // We need this data to "prepare" our filters.
+    juce::dsp::ProcessSpec spec;
+    spec.maximumBlockSize = samplesPerBlock;
+    spec.numChannels = 1;
+    spec.sampleRate = sampleRate;
+
+    leftChain.prepare(spec);
+    rightChain.prepare(spec);
 }
 
 void Simple_eqAudioProcessor::releaseResources()
@@ -144,21 +151,23 @@ void Simple_eqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
-    {
-        auto* channelData = buffer.getWritePointer (channel);
+    juce::dsp::AudioBlock<float> block(buffer); // Simply wrapping the buffer data in a more usable class. 
 
-        // ..do something to the data...
-    }
+    auto leftBlock = block.getSingleChannelBlock(0); // Extracting the left channel of the previous AudioBlock.
+    auto rightBlock = block.getSingleChannelBlock(1); // Right channel.
+
+    // Part of the processing context. It is 'Replacing' since input/output buffers are the same; they are being
+    // They are processed in place. Otherwise, if we were sending the buffers to another place, we would use ::ProcessContextNonReplacing
+    juce::dsp::ProcessContextReplacing<float> leftContext(leftBlock);
+    juce::dsp::ProcessContextReplacing<float> rightContext(rightBlock);
+
+    // Run dat shit
+    leftChain.process(leftContext);
+    rightChain.process(rightContext);
+
 }
 
-//==============================================================================
+//=============================================================================
 bool Simple_eqAudioProcessor::hasEditor() const
 {
     return true; // (change this to false if you choose to not supply an editor)
