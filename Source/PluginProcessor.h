@@ -10,6 +10,7 @@
 
 #include <JuceHeader.h>
 
+// Slope_12 = 0, Slope_24 = 1, etc etc. 
 enum Slope
 {
     Slope_12,
@@ -19,6 +20,7 @@ enum Slope
 };
 
 // Just a simple way to store these values in an organized way.
+// Holds the values for the DSP's live peak frequencies (RawParameterValue), low cut frequencies, etc etc.
 struct ChainSettings
 {
     float peakFreq { 0 }, peakGainInDecibels { 0 }, peakQuality { 1.f };
@@ -131,6 +133,9 @@ private:
         }
 
     }
+    void updateLowCutFilters(const ChainSettings& chainSettings);
+    void updateHighCutFilters(const ChainSettings& chainSettings);
+    void updateFilters();
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Simple_eqAudioProcessor)

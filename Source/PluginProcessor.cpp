@@ -103,22 +103,7 @@ void Simple_eqAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
     leftChain.prepare(spec);
     rightChain.prepare(spec);
 
-    auto chainSettings = getChainSettings(apvts);
-    updatePeakFilter(chainSettings);
-
-    // Slope Choice 0: 12 db/oct -> order : 2
-    // Slope Choice 1: 24 db/oct -> order : 4
-    // etc...
-    auto cutCoefficients = juce::dsp::FilterDesign<float>::designIIRHighpassHighOrderButterworthMethod(chainSettings.lowCutFreq,
-        sampleRate,
-        2 * (chainSettings.lowCutSlope + 1));
-    
-    auto& leftLowCut = leftChain.get<ChainPositions::LowCut>();
-    updateCutFilter(leftLowCut, cutCoefficients, chainSettings.lowCutSlope);
-
-    auto& rightLowCut = rightChain.get<ChainPositions::LowCut>();
-    updateCutFilter(rightLowCut, cutCoefficients, chainSettings.lowCutSlope);
-
+    updateFilters();
 }
 
 void Simple_eqAudioProcessor::releaseResources()
@@ -167,23 +152,8 @@ void Simple_eqAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, ju
     // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
-
-
-    auto chainSettings = getChainSettings(apvts);
-    updatePeakFilter(chainSettings);
     
-    // Slope Choice 0: 12 db/oct -> order : 2
-    // Slope Choice 1: 24 db/oct -> order : 4
-    // etc...
-    auto cutCoefficients = juce::dsp::FilterDesign<float>::designIIRHighpassHighOrderButterworthMethod(chainSettings.lowCutFreq,
-        getSampleRate(),
-        2 * (chainSettings.lowCutSlope + 1));
-
-    auto& leftLowCut = leftChain.get<ChainPositions::LowCut>();
-    updateCutFilter(leftLowCut, cutCoefficients, chainSettings.lowCutSlope);
-
-    auto& rightLowCut = rightChain.get<ChainPositions::LowCut>();
-    updateCutFilter(rightLowCut, cutCoefficients, chainSettings.lowCutSlope);
+    updateFilters();
 
     juce::dsp::AudioBlock<float> block(buffer); // Simply wrapping the buffer data in a more usable class. 
 
@@ -209,8 +179,8 @@ bool Simple_eqAudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* Simple_eqAudioProcessor::createEditor()
 {
-    //return new Simple_eqAudioProcessorEditor (*this);
-    return new juce::GenericAudioProcessorEditor(*this);
+    return new Simple_eqAudioProcessorEditor (*this);
+    //return new juce::GenericAudioProcessorEditor(*this);
 }
 
 //==============================================================================
@@ -219,14 +189,26 @@ void Simple_eqAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     // You should use this method to store your parameters in the memory block.
     // You could do that either as raw data, or use the XML or ValueTree classes
     // as intermediaries to make it easy to save and load complex data.
+    
+    juce::MemoryOutputStream mos(destData, true); // (memory block&, append to existing block)
+    apvts.state.writeToStream(mos); //Writes the value tree data to the mos, which then writes it to the memory block
 }
 
 void Simple_eqAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
     // You should use this method to restore your parameters from this memory block,
     // whose contents will have been created by the getStateInformation() call.
+
+    auto tree = juce::ValueTree::readFromData(data, sizeInBytes);
+    if (tree.isValid())
+    {
+        apvts.replaceState(tree); // Replaces the currents state of the apvts with the saved state from tree.
+        updateFilters(); // Now update filters with the new apvts state.
+    }
+
 }
 
+// Used in our update filters, to send in the fresh ChainSettings for the DSP. 
 ChainSettings getChainSettings(juce::AudioProcessorValueTreeState& apvts)
 {
     ChainSettings settings;
@@ -254,6 +236,51 @@ void Simple_eqAudioProcessor::updatePeakFilter(const ChainSettings& chainSetting
 void Simple_eqAudioProcessor::updateCoefficients(Coefficients& old, const Coefficients& replacements)
 {
     *old = *replacements;
+}
+
+// Applies to both LowCut and HighCut filters.
+void Simple_eqAudioProcessor::updateLowCutFilters(const ChainSettings& chainSettings)
+{
+    // Slope Choice 0: 12 db/oct -> order : 2
+    // Slope Choice 1: 24 db/oct -> order : 4
+    // etc...
+
+    // Get the appropriate cut coefficient.
+    auto cutCoefficients = juce::dsp::FilterDesign<float>::designIIRHighpassHighOrderButterworthMethod(chainSettings.lowCutFreq,
+        getSampleRate(),
+        2 * (chainSettings.lowCutSlope + 1));
+
+    auto& leftLowCut = leftChain.get<ChainPositions::LowCut>();
+    updateCutFilter(leftLowCut, cutCoefficients, chainSettings.lowCutSlope);
+
+    auto& rightLowCut = rightChain.get<ChainPositions::LowCut>();
+    updateCutFilter(rightLowCut, cutCoefficients, chainSettings.lowCutSlope);
+}
+
+void Simple_eqAudioProcessor::updateHighCutFilters(const ChainSettings& chainSettings)
+{
+    // HIGH CUT FILTER
+    auto highCutCoefficients = juce::dsp::FilterDesign<float>::designIIRHighpassHighOrderButterworthMethod(chainSettings.highCutFreq,
+        getSampleRate(),
+        2 * (chainSettings.highCutSlope + 1));
+
+    auto& leftHighCut = leftChain.get<ChainPositions::HighCut>();
+    auto& rightHighCut = rightChain.get<ChainPositions::HighCut>();
+
+    updateCutFilter(rightHighCut, highCutCoefficients, chainSettings.highCutSlope);
+    updateCutFilter(leftHighCut, highCutCoefficients, chainSettings.highCutSlope);
+
+}
+
+// Updates all filters for use in process and set up.
+void Simple_eqAudioProcessor::updateFilters()
+{
+
+    auto chainSettings = getChainSettings(apvts);
+
+    updateLowCutFilters(chainSettings);
+    updateHighCutFilters(chainSettings);
+    updatePeakFilter(chainSettings);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout Simple_eqAudioProcessor::createParameterLayout()
