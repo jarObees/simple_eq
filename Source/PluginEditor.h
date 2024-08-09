@@ -46,7 +46,10 @@ private:
         highCutFreqSlider,
         lowCutSlopeSlider,
         highCutSlopeSlider;
+    
+    std::vector<juce::Component*> getComps(); // Used to call up all our CustomRotarySliders
 
+    // Connects the sliders to the audio parameters.
     using APVTS = juce::AudioProcessorValueTreeState;
     using Attachment = APVTS::SliderAttachment;
 
@@ -59,7 +62,7 @@ private:
         lowCutSlopeSliderAttachment,
         highCutSlopeSliderAttachment;
 
-    std::vector<juce::Component*> getComps();
+    MonoChain monoChain;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Simple_eqAudioProcessorEditor)
 };

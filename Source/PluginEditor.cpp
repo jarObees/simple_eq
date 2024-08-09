@@ -10,6 +10,7 @@
 #include "PluginEditor.h"
 
 //==============================================================================
+// Where we actually connect the sliders to the apvts.
 Simple_eqAudioProcessorEditor::Simple_eqAudioProcessorEditor(Simple_eqAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p),
     peakFreqSliderAttachment(audioProcessor.apvts, "Peak Freq", peakFreqSlider),
@@ -48,6 +49,7 @@ void Simple_eqAudioProcessorEditor::resized()
 {
     // This is generally where you'll want to lay out the positions of any
     // subcomponents in your editor..
+    // Just layin out the sliders visually.
     auto bounds = getLocalBounds();
     auto responseArea = bounds.removeFromTop(bounds.getHeight() * 0.33);
 
